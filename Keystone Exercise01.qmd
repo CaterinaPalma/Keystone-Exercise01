@@ -89,21 +89,20 @@ str(catch_data)
 
 #Looking at Species and Site names: 
 Can't tell from these outputs how many levels of site and species we have. 
-Two options: let's check those explicitly by using distinct() or can convert to factors. 
-Let's look at the distinct values first, as we might need to clean before converting to factor vars. 
+Two Options: 
+1. Use distinct(site) to check how many different levels of site there are and do the same with distinct(species). 
+2. Convert to factors. 
+Let's look at the distinct values first, as we might need to clean before converting to factor variables. 
 ```{r}
 catch_data |>
   distinct(site)
 
 catch_data |>
   distinct(species)
-
-#Need to clean this dataset. Clean the names of species and site, we have 4 of each. 
 ```
-Ok, so we have four species in there as well as four sites, which look to be located at different points on the Ross River. So, we need to: 
-- Fix site names and place in reasonable order. 
-- Can decide this now or we can load the metadata and ensure consistency. 
-- Fix species names - to do this we'll need to make consistent and then use the taxonomic dictionary to translate to scientific names. 
+Ok, so we have four species and four sites, which look to be located at different points on the Ross River (zones). So, we need to: 
+- Fix site names. 
+- Fix species names - to do this we'll need to make consistent and then can use the taxonomic dictionary to translate to scientific names. 
 
 #Load metadata 
 ```{r}
@@ -119,33 +118,34 @@ glimpse(metadata)
 species_dict <- read.csv("data/workshop2/species_dictionary.csv")
 head(species_dict)
 ```
-#Loading Sonde Data .csv file 
+#Loading Sonde Data .csv file - which is sensor data. 
 ```{r}
 sonde_data <- read.csv("data/workshop2/estuary_sonde_data.csv")
 head(sonde_data)
 ```
 
-Site names are all over the place, names aren't all similar. 
-#NOTES: in the catch_data dataframe we are changing the site names so they are all the same genre, changing chcracter to be factor variable AND changing species name to all be the same genre. 
+#Changing site AND species names for catch_data data frame. 
+
 ```{r}
 catch_data <- catch_data |>
   mutate(
-    site = str_to_lower(str_trim(site)),
-    site = str_replace_all(site, " ","_")) |>
+    site = str_to_lower(str_trim(site)), #all site names into lowercase 
+    site = str_replace_all(site, " ","_")) |> #replace spaced with _
   #Convert all chr to fct
   mutate(across(where(is.character),as_factor)) |>
   mutate(
-    species = str_to_lower(str_trim(species)),
-    species = str_replace_all(species, " ", "_"))
+    species = str_to_lower(str_trim(species)), #converting all species names to lowercase 
+    species = str_replace_all(species, " ", "_")) #adding _ instead of spaces 
 ```
+Now all our site names and species names will be the same genre, lowercase and _. 
 
-Adding another column called scientific_name by using the key variable (the similar variable of species). 
+#Changing common name to scientific name using species_dict data frame 
 ```{r}
 catch_data <- catch_data |> 
   left_join(species_dict, by = join_by(species == common_name))
-#If I wanted to, I can delete the common name from the dataframe by using the below: 
 ```
 
+#Changing site names for metadata data frame 
 ```{r}
 metadata <- metadata |>
   mutate(
@@ -154,6 +154,7 @@ metadata <- metadata |>
   #Convert all chr to fct 
   mutate(across(where(is.character), as_factor))
 ```
+Now all site names are lowercase and have _ instead of a space. 
 
 #Recheck 
 ```{r}
@@ -161,7 +162,9 @@ catch_data |>
   str()
 glimpse(metadata)
 ```
-#NOTES: making a new dataframe called sensor_clean, using the sonde_data dataframe so I can change/clean the datetime, turbidity and salinity variables. 
+
+#New data frame for clean sonde_data or sensor data
+We are making a new data frame called sensor_clean, uing the sonde_data data frame, so we can clean/change the datetime, turbidity and salinity variables. 
 ```{r}
 sensor_clean <- sonde_data |>
   mutate(
@@ -174,7 +177,8 @@ sensor_clean <- sonde_data |>
   )
 ```
 
-#Making a new dataframe called sensor_clean_daily, which is going to have the mean of temperature, salinity and turbidity every 15 minutes into a day. 
+#Daily data frame for sensor data. 
+We are making a new data frame using sensor_clean, which is instead of having data from every 15 minutes of the day, it will just be the mean temperature, salinity and turbidity of day. Starting from may 1st, to may 30th 2026. 
 ```{r}
 sensor_clean_daily <- sensor_clean |>
     mutate(
@@ -190,12 +194,12 @@ sensor_clean_daily <- sensor_clean |>
   )
 ```
 
-
-#Implicit zero observations i.e. did not include zero into the data, meaning didn't catch any fish
-4x species 
-4x sites 
-30 surveys 
-#We should have 480 observations, not 427. 
+#Implicit zero observations 
+The catch_data frame did not have the zero observations i.e. didn't catch any of the fish, so we will need to add it. 
+- 4x species 
+- 4x sites 
+- 30 surveys 
+We should have 480 observations, not 427. 
 ```{r}
 4*4*30
 ```
