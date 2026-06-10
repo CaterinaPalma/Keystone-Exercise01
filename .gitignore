@@ -1,4 +1,6 @@
+# Files to ignore
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
