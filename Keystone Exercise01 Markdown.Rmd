@@ -1,0 +1,339 @@
+---
+title: "Keystone Exercise"
+author: "Caterina Palma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+html_document: 
+  code_folding: show 
+  collapse: no
+  df_print: paged 
+  fig_caption: yes
+  fig_height: 6 
+  fig_width: 10 
+  highlight: textmate 
+  theme: spacelab 
+  toc: yes
+  toc_float: yes 
+editor_topions: 
+chunk_output_type: inline 
+---
+
+# Introduction
+
+Here we are going to wrangle messy data on the Ross River estuary fish
+surveys and produce clean tables and figure. We have 4 seperate files to
+wrangle in and use.
+
+```{r setup, include=FALSE}
+#Set options, housekeeping
+knitr::opts_chunk$set(
+  echo = TRUE,
+  include = TRUE,
+  message = FALSE,
+  warning = FALSE)
+```
+
+##### Housekeeping
+
+```{r housekeeping }
+#| message: true
+#| warning: false
+rm(list = ls())
+```
+
+#### Packages
+
+```{r}
+library(tidyverse) #includes dplyr, ggplot2, lubridate etc. 
+library(readxl) #for reading in excel files 
+```
+
+#### Main dataset
+
+```{r}
+#getwd() #this helps me see where my file path is. 
+#The catch data is split across 4 table in one excel file, so we load each tab/sheet individually, hence sheet = 1, sheet = 2 etc. 
+
+catch1 <- read_excel(here::here("data/workshop2/estuary_catch_log.xlsx"), sheet = 1)
+catch2 <- read_excel(here::here("data/workshop2/estuary_catch_log.xlsx"), sheet = 2)
+catch3 <- read_excel(here::here("data/workshop2/estuary_catch_log.xlsx"), sheet = 3)
+catch4 <- read_excel(here::here("data/workshop2/estuary_catch_log.xlsx"), sheet = 4)
+```
+
+#### Alternative method for loading files
+
+```{r}
+#the file is anchored where the .qmd file is 
+file_path <- "data/workshop2/estuary_catch_log.xlsx"
+catch_data <- excel_sheets(file_path) |> 
+  map_dfr(~read_excel(path = file_path, sheet = .x))
+```
+
+#### Inspect individual tabs
+
+```{r}
+catch1
+catch2
+catch3
+catch4
+```
+
+#### Binding Rows Together
+
+```{r}
+catch_data <- bind_rows(catch1, catch2, catch3, catch4)
+#clean up the environment (i.e. removes the catch data from our environment window)
+rm(catch1, catch2, catch3, catch4)
+```
+
+#### Examine data
+
+```{r}
+catch_data
+head(catch_data)
+glimpse(catch_data)
+str(catch_data)
+```
+
+#### Looking at Species and Site names: Can't tell from these outputs how
+many levels of site and species we have. Two Options: 1. Use
+distinct(site) to check how many different levels of site there are and
+do the same with distinct(species). 2. Convert to factors. Let's look at
+the distinct values first, as we might need to clean before converting
+to factor variables.
+
+```{r}
+catch_data |>
+  distinct(site)
+
+catch_data |>
+  distinct(species)
+```
+
+Ok, so we have four species and four sites, which look to be located at
+different points on the Ross River (zones). So, we need to: - Fix site
+names. - Fix species names - to do this we'll need to make consistent
+and then can use the taxonomic dictionary to translate to scientific
+names.
+
+#### Load metadata
+
+```{r}
+metadata <- read.csv("data/workshop2/estuary_metadata.csv")
+```
+
+Inspect the data...
+
+```{r}
+head(metadata)
+glimpse(metadata)
+```
+
+#### Loading Taxonomic Dictionary .csv file:
+
+```{r}
+species_dict <- read.csv("data/workshop2/species_dictionary.csv")
+head(species_dict)
+```
+
+#### Loading Sonde Data .csv file - which is sensor data.
+
+```{r}
+sonde_data <- read.csv("data/workshop2/estuary_sonde_data.csv")
+head(sonde_data)
+```
+
+#### Changing site AND species names for catch_data data frame.
+
+```{r}
+catch_data <- catch_data |>
+  mutate(
+    site = str_to_lower(str_trim(site)), #all site names into lowercase 
+    site = str_replace_all(site, " ","_")) |> #replace spaced with _
+  #Convert all chr to fct
+  mutate(across(where(is.character),as_factor)) |>
+  mutate(
+    species = str_to_lower(str_trim(species)), #converting all species names to lowercase 
+    species = str_replace_all(species, " ", "_")) #adding _ instead of spaces 
+```
+
+Now all our site names and species names will be the same genre,
+lowercase and \_.
+
+#### Changing common name to scientific name using species_dict data frame
+
+```{r}
+catch_data <- catch_data |> 
+  left_join(species_dict, by = join_by(species == common_name))
+```
+
+#### Changing site names for metadata data frame
+
+```{r}
+metadata <- metadata |>
+  mutate(
+    site_name = str_to_lower(str_trim(site_name)),
+    site_name = str_replace_all(site_name, " ", "_")) |>
+  #Convert all chr to fct 
+  mutate(across(where(is.character), as_factor))
+```
+
+Now all site names are lowercase and have \_ instead of a space.
+
+#### Recheck
+
+```{r}
+catch_data |>
+  str()
+glimpse(metadata)
+```
+
+#### New data frame for clean sonde_data or sensor data We are making a new
+data frame called sensor_clean, uing the sonde_data data frame, so we
+can clean/change the datetime, turbidity and salinity variables.
+
+```{r}
+sensor_clean <- sonde_data |>
+  mutate(
+    #clean the messy character string (Dat/Month/Year Hour:Minute)
+    datetime = dmy_hm(timestamp),
+    #convert the -999.0 to NA 
+    turbidity = na_if(turbidity, -999),
+    #convert the negative values of salinity to NA 
+    salinity = ifelse(salinity < 0, NA, salinity)
+  )
+```
+
+#### Daily data frame for sensor data. We are making a new data frame using
+sensor_clean, which is instead of having data from every 15 minutes of
+the day, it will just be the mean temperature, salinity and turbidity of
+day. Starting from may 1st, to may 30th 2026.
+
+```{r}
+sensor_clean_daily <- sensor_clean |>
+    mutate(
+    date = floor_date(datetime, "day"), #rounds the dates down to just the date, without the minutes 1 (i.e. 1/5/26)
+    date = as_date(date) #ensure it matches the date format of the catch_data log
+  ) |>
+  group_by(site, date) |>
+  summarise(
+    mean_temp = mean(temperature, na.rm = TRUE),
+    mean_salinity = mean(salinity, na.rm = TRUE),
+    mean_turbidity = mean(turbidity, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+#### Implicit zero observations The catch_data frame did not have the zero
+observations i.e. didn't catch any of the fish, so we will need to add
+it. - 4x species - 4x sites - 30 surveys We should have 480
+observations, not 427.
+
+```{r}
+4*4*30
+```
+
+### TO DO: 1. Join the catch_data with metadata and sensor_clean data
+frames. 2. Deal with implicit zero observations.
+
+#### 1. Done below:
+
+```{r}
+catch_data <- catch_data |> 
+  left_join(metadata, by = join_by(site == site_name)) |>
+  left_join(sensor_clean_daily, by = join_by(site,date))
+```
+
+#### 2. Done below: We not have 480 rows.
+
+```{r}
+catch_data <- catch_data |>
+  complete(
+    nesting(site, date, lat, lon, zone, mean_temp, mean_salinity, mean_turbidity),
+    scientific_name) |>
+  mutate(count = coalesce(count, 0))
+```
+
+#### Median Salinity & Standard Error of Mean Salinity: This shows that the
+salinity is different in each zone i.e. less salty in upstream (near
+freshwater) than marine.
+
+```{r}
+salinity_summary <- catch_data |>
+  group_by(zone) |>
+  summarise(
+    sem_salinity = sd(mean_salinity)/sqrt(n()), #sem_salinity is standard error of mean salinity
+    #sd_salinity = sd(mean_salinity, na.rm = TRUE),
+    median_salinity = median(mean_salinity, na.rm = TRUE),
+    .groups ="drop"
+  )
+```
+
+#### Or with plotrix: Here we have grouped by zone because again we are just
+looking at salinity, and the main variable we need to look at would be
+zone, because that is where the change will be.
+
+```{r}
+library(plotrix)
+catch_data |> 
+  group_by(zone) |>
+  summarise(
+    sem_salinity = std.error(count),
+    #sd_salinity = sd(mean_salinity, na.rm = TRUE)
+    median_salinity = median(mean_salinity, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+### Making Salinity Figure
+
+```{r}
+salinity_summary |>
+  ggplot(aes(x = zone, y = median_salinity)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = median_salinity - sem_salinity, ymax = median_salinity + sem_salinity), width = 0.2) +
+  theme_minimal() +
+  labs(#title = "Median Salinity by Zone with Standard Deviation error bars",
+    x = "Zone",
+    y = "Median Salintiy (ppt)")
+```
+
+#### Calculating Fish Stats
+
+```{r}
+fish_stats <- catch_data |>
+  group_by(zone, scientific_name) |>
+  summarise(
+    mean_catch = mean(count),
+    sem_catch = sd(count)/sqrt(n()),
+    .groups = "drop"
+  )
+```
+
+### Creating Fish Stats Figure (ggplot)
+
+```{r}
+fish_stats |>
+  ggplot(aes(x = zone, y = mean_catch, fill = zone)) +
+  geom_point(position = "dodge", size = 2, pch = 23) +
+  #geom_line(group = 1) +
+  geom_errorbar(aes(ymin = mean_catch - sem_catch, ymax = mean_catch + sem_catch),
+                position = position_dodge(0.9), width = 0.2) +
+  #add in points from master data 
+  geom_point(data = catch_data, aes(x = zone, y = count), 
+             position = position_jitter(width = 0.2), alpha = 0.2, size = 1, inherit.aes = FALSE) +
+  facet_wrap(~scientific_name, scales = "fixed") +
+  theme_bw() +
+  theme(
+    strip.text = element_text(face = "italic", size = 10, colour = "grey0"),
+    #legend.position = "bottom" 
+    legend.position = "none"
+  ) + 
+  labs(
+    #title = "Predatory Fish Abundance across Esturine Salinity Gradients", 
+    #subtitle = "Ross River Estuary System, May 2026", 
+    x = "Spatial Zone",
+    y = "Abundance (per day)",
+    fill = "Spatial Zone"
+  )
+```
