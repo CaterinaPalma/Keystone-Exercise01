@@ -1,14 +1,14 @@
 # Keystone-Exercise01 - Ross River Estuary Fish Survey 
 
-**What was this exercise about?**
+#### What was this exercise about? 
 
-We recieved four datasets from a PhD student that we needed to completely transform to a useable and readable dataset for R, to then be used to create plots and understand what the dataset presented. 
+We received four datasets from a PhD student that we needed to completely transform to a usable and readable dataset for R, to then be used to create plots and understand what the data is presenting. 
 
-**What exactly did we do?**
+#### What did we do? 
+We used all of our learning from previous workshops to wrangle, clean and turn a messy dataset into a neat, understandble one, that can be used to create graphs and plots for ecological understanding! 
+Some of the activities we did included: 
+- separate excel tabs and then combined them together
+- cleaned the site names and dates so they are all uniform 
+- create graphs 
 
-- seperate excel tabs and then combine them together
-- change names of sites and species so they all follow the same genre
-- change dates into uniformity
-- create graphs
-
-
+This was my favourite part of module 2, as I finally developed an understanding of coding. Check out the code in the folder and the final product on my website: https://sites.google.com/view/mb5370-assessment-portfolio/home-page 
