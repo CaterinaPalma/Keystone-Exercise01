@@ -23,7 +23,7 @@ editor_options:
 # Introduction 
 
 Here we are going to wrangle messy data on the Ross River estuary fish surveys and produce clean tables and figure. 
-We have 4 seperate files to wrangle in and use. 
+We have 4 separate files to wrangle in and use. 
 
 ```{r setup, include=FALSE}
 #Set options, housekeeping
